@@ -42,37 +42,83 @@ que nada de `brew install`.
   `src/Cafe/Filesystem/fscDeviceAndroidSAF.cpp`, `src/android/app/src/main/cpp/`.
 - Detalle clave: usa SAF (Storage Access Framework) para acceder a los juegos.
 
-## Estado: la cadena de build FUNCIONA
+## Estado: la cadena de build FUNCIONA y el APK ya está probado en un móvil real
 
-- **Build #2 (commit `a9be619`): `Build Cemu` → SUCCESS.** El emulador se
-  compila entero en la nube.
-- Falló después el paso `Merge logs` (bug mío), lo que arrastró a `Upload APK`
-  porque no tenía `if: always()`. Corregido en `e4b2fc9`.
-- Build #3 launched desde `e4b2fc9`: debe dejar el APK en el artefacto
-  `Cemu-apk-debug`.
+- Builds #4 a #11 completados correctamente en GitHub Actions.
+- **El artefacto por defecto es `Cemu-apk-release`.** Ver "El bug del build
+  debug" más abajo: era la causa del bajo rendimiento.
+- Descargar el artefacto requiere sesión de GitHub iniciada en el navegador; la
+  API anónima devuelve 401/403.
+- Para diagnosticar builds fallidos hace falta un token de GitHub con
+  `Actions: read`. Opciones: pegarlo en `~/.config/gh_token` (chmod 600) y leerlo
+  desde ahí con curl, o que el usuario baje el `build-log` a mano.
+
+### Dispositivo de pruebas
+
+Samsung Galaxy S24 Ultra. Snapdragon 8 Gen 3 (SM8650), 11 GB RAM, Adreno 750,
+driver Turnip Mesa 26.0.0-devel, Android API 36. Cemu 2.3.0, arm64-v8a.
+
+### El bug del build debug (el hallazgo importante)
+
+Todas las builds que se distributed hasta el commit `681e07d9` eran **debug**. En
+un emulador eso es determinante, porque el recompilador de PowerPC (el JIT que
+traduce el código de la consola sobre la marcha) se compilaba sin optimización y
+con `NDEBUG` sin definir, es decir con todas las aserciones activas. El efecto
+observado: tirones y lentitud en escenas con más carga, y compilación de shaders
+muy lenta.
+
+El proyecto ya soportaba release sin keystore (`build.gradle.kts:93-97` firma con
+la clave de debug si no hay `ANDROID_STORE_FILE`), así que no hacía falta
+configurar nada. Se puso `release` como valor por defecto.
+
+`isMinifyEnabled` se dejó en `false` a propósito: la ganancia está en el C++, y R8
+con Compose+JNI es riesgo innecesario en runtime. `-dontobfuscate` ya protege los
+nombres que usa el JNI.
+
+**Conclusión: antes de culpar a la GPU o al driver, comprobar el tipo de build.**
+El usuario llegó a esta conclusión comparando con un emulador de Switch; ver
+"Por qué Switch va mejor" en ANALYSIS_NATIVE.md.
+
+## Problemas ya resueltos y verificados en dispositivo
+
+| Problema | Commit | Estado |
+|---|---|---|
+| Rendimiento bajo y shaders lentos | `681e07d9` | Resuelto, verificado por el usuario |
+| Crash de New Super Mario Bros. U | `65ad9db3` | Resuelto, verificado por el usuario |
+| Ajustes de CPU inaccesibles | `849e40c` | Funciona, pero no era la causa del calor |
+| Full sync at GX2DrawDone inaccesible | `514dd429` | Expuesto |
+| Importar archivos de sistema | `21752744`, `b470dcc7` | A la espera de probar |
+| Nombre e icono de la app | `fcec29d8` | A la espera de revisar el icono |
+
+Lo que hizo el usuario al informar que un emulador de Switch iba fluido en el
+mismo móvil:kehxo que el problema no era el hardware sino el build.
 
 ## Cómo trabajar aquí
 
 1. Editar en `~/Developer/Cemu`.
 2. `git add` + `commit` + `git push origin android-port`.
 3. GitHub Actions compila solo.
-4. Descargar el APK: pestaña Actions → run → artifact `Cemu-apk-debug` → unzip.
-   (Requiere sesión de GitHub; no se puede bajar por API sin token.)
-5. Instalar en el móvil por USB: `adb install -r <apk>`.
+4. Descargar el APK: pestaña Actions → run → artifact `Cemu-apk-release` → unzip.
+5. Instalar en el móvil. El APK de release tiene identificador
+   `info.cemu.cemu` y el debug `info.cemu.cemu.debug`: **conviven como apps
+   separadas** y no comparten partidas ni Ajustes.
 
 ## Pendiente / bloqueos conocidos
 
-- **API de GitHub sin token**: los logs y artefactos dan 401/403 al descarga
-  anónima. Para diagnosticar builds fallidos hace falta un token de GitHub con
-  permiso `Actions: read`. Opciones: pegarlo en `~/.config/gh_token` (chmod 600)
-  y leerlo desde ahí con curl, o que el usuario baje el `build-log` a mano.
-- **Nunca se ha probado el APK en un móvil real.** No se sabe si arranca ni si
-  carga juegos. Es el siguiente hitoUnknown.
-- Caché de vcpkg ya poblada: los builds deberían bajar de 60 min a ~15-20 min.
+- **El menú de la Wii U y el Mii Maker no se han probado todavía.** Falta
+  instalar `otp.bin`, `seeprom.bin`, `mlc01` y `cafeLibs` (ver ANALYSIS_NATIVE.md).
+- **Falta la medida de FPS** para saber cuánto se ha ganado con el build release
+  y si el problema de "zonas lentas" queda resuelto del todo.
+- El icono nuevo se generó con `sips` sin poder revisar el resultado visualmente.
+- El log del móvil contiene spam repetido `"Unsupported clear depth as color"`:
+  localizar el origen y degradar ese log, porque en un build de depuración puede
+  costar I/O por frame.
+- Caché de vcpkg poblada: los builds bajan de 60 min a ~20-25 min.
 
 ## Hitos siguientes
 
-1. Conseguir el APK e instalarlo en el móvil. Ver si arranca.
-2. Cargar un juego de verdad (los juegos van en la SD/teléfono; Cemu no incluye
-   las claves, el usuario pone su propio juego desde el dispositivo).
-3. Profiling y optimización real.
+1. Probar el importador de archivos de sistema y arrancar el menú de la Wii U.
+2. Medir FPS en la zona que antes iba a tirones, con el móvil sin cargador.
+3. Si el menú no arranca, el siguiente intento es generar `cafeLibs` a partir de
+   los archivos de sistema descifrados.
+

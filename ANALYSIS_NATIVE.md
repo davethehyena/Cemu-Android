@@ -119,3 +119,88 @@ Se ha revivido:
 - `ActiveSettings::GetCPUMode()`: el ajuste global tiene prioridad sobre el perfil.
 - Expuesto en Ajustes > General como "CPU mode".
 - `GetPhysicalCoreCount()` detecta nucleos grandes en Android via `cpufreq`.
+
+## Por que un emulador de Switch va mucho mejor en el mismo movil
+
+No es que Switch emule "nativamente". Es cuestion de arquitecturas:
+
+| Consola | CPU | Telefono | Traduccion |
+|---|---|---|---|
+| Wii U | PowerPC, **big-endian** | ARM, **little-endian** | Carisima |
+| Switch | ARM (Cortex-A57) | ARM (Cortex) | Barata |
+
+Cemu nunca corre nativo en ningun equipo: un PC es x86-64 y la Wii U es
+PowerPC, asi que la traduccion es obligatoria por diseno del hardware, no por un
+fallo de la implementacion. Aparte, los emuladores de Switch sustituyen mucho
+codigo del sistema por HLE.
+
+Lo que si es cierto, y es la lesson de este port: **no se puede eliminar la
+traduccion, pero se puede abaratar**, que es justo lo que hizo RPCS3 con su
+"descubrimiento" de la CPU de PS3 (abril 2026, 5-7% mas de FPS generando codigo
+nativo mas eficiente). En Cemu las palancas son:
+
+1. **Mejor codigo generado** por el recompilador (`PpcRecompiler`).
+2. **HLE** para sustituir funciones conocidas del sistema.
+3. **Traduccion de shaders** por la ruta Vulkan.
+
+**Regla practica: ante bajo rendimiento, comprobar primero el tipo de build.**
+Durante mucho tiempo se culpó a la GPU y al driver de Turnip, y la causa real era
+que se estaban distribuyendo compilaciones de depuracion.
+
+## Los shaders precompilados no existen en la ruta Vulkan
+
+`GetPrecompiledShadersOption()` devuelve siempre `PrecompiledShaderOption::Auto`
+ignorando la configuracion, y la opcion solo se consulta en la ruta OpenGL. En
+Vulkan no hay soporte de shaders precompilados: existe una cache de pipelines en
+tiempo de ejecucion y `async_compile` esta activo. Por eso la primera vez que se
+entra en una zona nueva hay coste de compilacion.
+
+Consecuencia practica: distinguir si una zona va lenta solo la primera vez
+(compilacion) o tambien al repetir (cuello de botella real de CPU o GPU).
+
+## Archivos de sistema: que hace falta para el menu de la Wii U
+
+El menu (00050010), Mii Maker y los Ajustes del sistema son titulos de
+*aplicacion*, no modulos de Cafe OS, asi que el HLE no puede sustituirlos:
+
+    rpl.cpp:1976-1981
+    // if no CafeLibs RPL is present then try to load as a HLE module
+    if (!fs::exists(cafeLibsFilePath, ec))
+        newDependency->rplHLEModule = RPLLoader_GetHLECafeOSModule(moduleName);
+
+`RPLLoader_GetHLECafeOSModule` solo busca en `GetCOSModules()` (linea 1926), o
+sea un puñado de modulos del sistema. Por eso `cafeLibs` es **imprescindible**
+para el menu: sin el, el arranque se queda en "please wait".
+
+Archivos necesarios en la carpeta de datos del emulador:
+
+- `otp.bin` (1024 bytes) y `seeprom.bin` (512 bytes). Si no estan, el log avisa
+  con `No otp.bin found` / `No seeprom.bin found`.
+- `cafeLibs/`: librerias del sistema descifradas.
+- `mlc01/`: la memoria de la tarjeta, donde vive `sys/title/00050010`
+  (`TitleList.cpp:290` la escanea).
+- `keys.txt` es opcional: se crea solo y solo hace falta para discos WUD/WUX.
+
+Este fork **no usa carpeta `nand`**: no existe en el codigo. La SLC se genera a
+partir de lo anterior.
+
+La **region se lee del seeprom** (`ncrypto.cpp:786`, offset 0xA4), asi que un
+seeprom EUR configura la consola en europea sin tocar codigo. Por eso el boton de
+region que estaba planeado dejo de ser necesario. `CemuConfig.cpp:314` tiene
+ademas la escritura de `console_region` comentada y el campo esta muerto:
+`GetPlatformRegion()` (`CafeSystem.cpp:1038`) deduce la region del titulo en
+juego con USA como valor por defecto.
+
+## Trampa de Android: dos almacenes
+
+El `userDataPath` de Cemu es el almacenamiento **externo**
+(`getExternalFilesDir`, via `Context.internalFolder()` en
+`CemuApplication.kt:151`), no `context.filesDir` que es el interno. Escribir en
+el sitio equivocado no da ningun error, solo que el emulador no encuentra nada.
+Por eso el importador de archivos de sistema usa `internalFolder()`.
+
+Relacionado: desde Android 11 el explorador de archivos del movil y OpenMTP no
+tienen acceso de escritura a `Android/data`, asi que copiar los archivos a mano
+no es viable. La solucion fue el boton "Import system files", que usa
+`java.util.zip` en Kotlin leyendo el `content://` URI de SAF. Se evito minizip a
+proposito: no esta enlazado en el target de Android y habria exigido tocar CMake.
