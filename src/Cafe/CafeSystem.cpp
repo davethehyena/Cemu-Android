@@ -339,6 +339,10 @@ uint32 LoadSharedData()
 				continue;
 			}
 			uint32 fileSize = fontFile->GetSize();
+			// El tamano por fuente delata un volcado parcial: CafeStd.ttf es el
+			// que aporta los glifos de las tildes y si sale truncado el menu los
+			// pierde. Sin este dato no hay forma de distinguirlo desde fuera.
+			cemuLog_log(LogType::Force, "Shared font {}: {}KB", shareddataDef[i].fileName, fileSize / 1024);
 			fontFile->readData(dataWritePtr, fileSize);
 			delete fontFile;
 			// setup entry

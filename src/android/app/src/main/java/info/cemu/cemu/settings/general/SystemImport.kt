@@ -66,11 +66,11 @@ object SystemImport {
             val from = File(source, name)
             if (!from.exists()) continue
             val to = File(filesDir, name)
-            if (to.exists() && !to.deleteRecursively()) {
-                log("could not replace existing $name")
-                continue
-            }
-            if (!from.renameTo(to)) from.copyRecursively(to, overwrite = true)
+            // Merge y nunca reemplazo. Dumpling entrega un mlc01 con solo sys y
+            // usr: si borrases el destino, el usuario perderia sus juegos y sus
+            // partidas guardadas. copyRecursively sobrescribe lo que llega del
+            // zip y conserva lo que ya habia y el zip no trae.
+            from.copyRecursively(to, overwrite = true)
             imported.add(name)
             log("imported $name into ${to.absolutePath}")
         }
