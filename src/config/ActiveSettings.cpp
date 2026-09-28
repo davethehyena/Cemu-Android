@@ -64,7 +64,12 @@ bool ActiveSettings::DisplayDRCEnabled()
 
 CPUMode ActiveSettings::GetCPUMode()
 {
-	auto mode = g_current_game_profile->GetCPUMode().value_or(CPUMode::Auto);
+	// El ajuste global tiene prioridad sobre el perfil del juego, para que en
+	// portales donde no se puede editar el perfil (Android) se pueda elegir
+	// entre 1 y 3 hilos de emulacion.
+	auto mode = GetConfig().cpu_mode.GetValue();
+	if (mode == CPUMode::Auto)
+		mode = g_current_game_profile->GetCPUMode().value_or(CPUMode::Auto);
 
 	if (mode == CPUMode::Auto)
 	{

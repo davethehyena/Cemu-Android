@@ -68,7 +68,26 @@ fun GeneralSettingsScreen(
             choiceToString = { gamePadPositionToString(it) },
             choices = GamePadPosition.entries,
         )
+
+        SingleSelection(
+            label = tr("CPU mode"),
+            initialChoice = NativeSettings::getCpuMode,
+            onChoiceChanged = NativeSettings::setCpuMode,
+            choiceToString = { cpuModeToString(it) },
+            choices = listOf(
+                NativeSettings.CpuMode.AUTO,
+                NativeSettings.CpuMode.MULTICORE_RECOMPILER,
+                NativeSettings.CpuMode.SINGLE_CORE_RECOMPILER,
+            ),
+        )
     }
+}
+
+private fun cpuModeToString(mode: Int): String = when (mode) {
+    NativeSettings.CpuMode.AUTO -> tr("Automatic")
+    NativeSettings.CpuMode.MULTICORE_RECOMPILER -> tr("Multi-core (3 threads, faster)")
+    NativeSettings.CpuMode.SINGLE_CORE_RECOMPILER -> tr("Single-core (1 thread, cooler)")
+    else -> throw IllegalArgumentException("Invalid CPU mode: $mode")
 }
 
 private fun gamePadPositionToString(position: GamePadPosition) = when (position) {

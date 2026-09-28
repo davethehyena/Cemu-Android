@@ -31,6 +31,18 @@ object NativeSettings {
     @JvmStatic
     external fun setVsyncMode(value: Int)
 
+    @JvmStatic
+    external fun getCpuMode(): Int
+
+    @JvmStatic
+    external fun setCpuMode(value: Int)
+
+    object CpuMode {
+        const val SINGLE_CORE_RECOMPILER: Int = 1
+        const val MULTICORE_RECOMPILER: Int = 3
+        const val AUTO: Int = 4
+    }
+
     object FullscreenScaling {
         const val KEEP_ASPECT_RATIO: Int = 0
         const val STRETCH: Int = 1

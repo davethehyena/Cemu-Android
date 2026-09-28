@@ -85,3 +85,37 @@ almacenamiento interno frente a almacenamiento externo/SAF.
 - `NativeEmulation.cpp:167-183` crea la superficie Android vía `SurfaceTexture`.
   Path normal; el *frame pacing* merece revisión cuando haya un dispositivo real
   con el que medir.
+
+## Correccion: la resolucion de render ya es 1280x720
+
+La hipotesis inicial de que Cemu renderizaba por encima de la resolucion nativa
+era **incorrecta**. `LatteThread.cpp:53-54` fija el framebuffer emulado a 1280x720
+de forma fija, que es la resolucion nativa de Wii U:
+
+    LatteHandleOSScreen_getOrCreateScreenTex(..., 1280, 720, 1280);
+
+La separacion entre resolucion emulada y ventana ya existe
+(`LatteRenderTarget_getScreenImageArea`, lineas 830-864): la imagen de 1280x720
+se escala alPresentarla. Limitar la resolucion de render no aportaria nada, asi
+que no se ha implementado ningun ajuste de este tipo.
+
+## La palanca real de calor: hilos de CPU emulada
+
+`OSSchedulerBegin` (coreinit_Thread.cpp:1470-1488) solo admite 1 o 3:
+
+    cemu_assert_debug(numCPUEmulationThreads == 1 || numCPUEmulationThreads == 3);
+
+- 1 = `SinglecoreRecompiler`, 3 = `MulticoreRecompiler`.
+- `CafeSystem.cpp:894` elige entre `OSSchedulerBegin(3)` y `OSSchedulerBegin(1)`.
+
+El motor no admite un numero arbitrario de hilos, asi que la opcion util es
+forzar 1 en vez de 3.
+
+`CemuConfig::cpu_mode` ya existia pero estaba **muerto**: declarado en
+`CemuConfig.h:442` y sin cargar, sin guardar y sin consumir (todo comentado).
+Se ha revivido:
+
+- `CemuConfig.cpp`: se carga y se guarda.
+- `ActiveSettings::GetCPUMode()`: el ajuste global tiene prioridad sobre el perfil.
+- Expuesto en Ajustes > General como "CPU mode".
+- `GetPhysicalCoreCount()` detecta nucleos grandes en Android via `cpufreq`.

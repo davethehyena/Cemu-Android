@@ -219,6 +219,18 @@ Java_info_cemu_cemu_nativeinterface_NativeSettings_setVsyncMode([[maybe_unused]]
 	GetConfig().vsync = vsync_mode;
 }
 
+extern "C" [[maybe_unused]] JNIEXPORT jint JNICALL
+Java_info_cemu_cemu_nativeinterface_NativeSettings_getCpuMode([[maybe_unused]] JNIEnv* env, [[maybe_unused]] jclass clazz)
+{
+	return static_cast<jint>(GetConfig().cpu_mode.GetValue());
+}
+
+extern "C" [[maybe_unused]] JNIEXPORT void JNICALL
+Java_info_cemu_cemu_nativeinterface_NativeSettings_setCpuMode([[maybe_unused]] JNIEnv* env, [[maybe_unused]] jclass clazz, jint cpu_mode)
+{
+	GetConfig().cpu_mode = static_cast<CPUMode>(cpu_mode);
+}
+
 extern "C" [[maybe_unused]] JNIEXPORT jboolean JNICALL
 Java_info_cemu_cemu_nativeinterface_NativeSettings_getAccurateBarriers([[maybe_unused]] JNIEnv* env, [[maybe_unused]] jclass clazz)
 {

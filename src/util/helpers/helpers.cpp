@@ -266,6 +266,46 @@ uint32_t GetPhysicalCoreCount()
 
 	s_core_count = core_count;
 	return core_count;
+#elif defined(__ANDROID__)
+	// Android: los SoCmoviles son big.LITTLE, asi que contar solo los nucleos
+	// grandes da una estimacion mucho mejor de la potencia realmente disponible.
+	// Sin esto, hardware_concurrency() sumaria los nucleos lentos y el emulador
+	// creeria que tiene mas potencia de la que tiene.
+	auto core_count = std::thread::hardware_concurrency();
+
+	// Frecuencia maxima en kHz a partir de la cual consideramos que un nucleo es
+	// "grande". Por debajo de ~1.8GHz casi siempre se trata de un nucleo little.
+	constexpr sint64 BIG_CORE_MIN_KHZ = 1800000;
+	sint32 big_cores = 0;
+	sint32 detected_cores = 0;
+
+	for (sint32 i = 0; i < 16; i++)
+	{
+		auto cpufreq_path = fmt::format("/sys/devices/system/cpu/cpu{}/cpufreq/cpuinfo_max_freq", i);
+		std::ifstream cpufreq_file(cpufreq_path);
+		if (!cpufreq_file.is_open())
+			break; // los nucleos son contiguos, el primer hueco marca el final
+
+		sint64 max_khz = 0;
+		cpufreq_file >> max_khz;
+		// algunos kernels exponen el valor en Hz en vez de kHz
+		if (max_khz > 0 && max_khz < 100000)
+			max_khz *= 1000;
+		if (max_khz <= 0)
+			continue;
+
+		detected_cores++;
+		if (max_khz >= BIG_CORE_MIN_KHZ)
+			big_cores++;
+	}
+
+	// Solo usamos el conteo de nucleos grandes si la deteccion fue coherente;
+	// si no, caemos a hardware_concurrency().
+	if (detected_cores > 0 && big_cores > 0)
+		core_count = big_cores;
+
+	s_core_count = core_count;
+	return core_count;
 #else
 	return std::thread::hardware_concurrency();
 #endif
