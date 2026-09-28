@@ -37,6 +37,12 @@ object NativeSettings {
     @JvmStatic
     external fun setCpuMode(value: Int)
 
+    @JvmStatic
+    external fun getGx2DrawDoneSync(): Boolean
+
+    @JvmStatic
+    external fun setGx2DrawDoneSync(enabled: Boolean)
+
     object CpuMode {
         const val SINGLE_CORE_RECOMPILER: Int = 1
         const val MULTICORE_RECOMPILER: Int = 3

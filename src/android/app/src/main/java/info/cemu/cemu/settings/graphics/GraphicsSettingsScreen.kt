@@ -54,6 +54,12 @@ fun GraphicsSettingsScreen(navigateBack: () -> Unit, goToCustomDriversSettings: 
             initialCheckedState = NativeSettings::getAccurateBarriers,
             onCheckedChanged = NativeSettings::setAccurateBarriers,
         )
+        Toggle(
+            label = tr("Full sync at GX2DrawDone"),
+            description = tr("If synchronization is requested by the game, the emulated CPU will wait for the GPU to finish all operations. Disabling it improves performance at the cost of some visual glitches"),
+            initialCheckedState = NativeSettings::getGx2DrawDoneSync,
+            onCheckedChanged = NativeSettings::setGx2DrawDoneSync,
+        )
         SingleSelection(
             label = tr("Fullscreen scaling"),
             initialChoice = NativeSettings::getFullscreenScaling,
