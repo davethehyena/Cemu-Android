@@ -23,7 +23,7 @@ sealed interface SystemImportResult {
 object SystemImport {
     private val REQUIRED = listOf("mlc01", "cafeLibs", "otp.bin", "seeprom.bin")
 
-    fun import(context: Context, uri: Uri): SystemImportResult {
+    fun import(context: Context, uri: Uri, onProgress: (String) -> Unit = {}): SystemImportResult {
         // Ojo: tiene que ser internalFolder() y no filesDir. Cemu usa
         // getExternalFilesDir() como userDataPath (CemuApplication:151), asi que
         // escribir en filesDir deja los archivos donde el emulador no los mira.
@@ -42,7 +42,7 @@ object SystemImport {
         }
 
         return try {
-            if (!extractZip(context, uri, tempDir)) {
+            if (!extractZip(context, uri, tempDir, onProgress)) {
                 log("FAIL not a readable archive")
                 SystemImportResult.InvalidArchive
             } else {
@@ -81,7 +81,12 @@ object SystemImport {
         }
     }
 
-    private fun extractZip(context: Context, uri: Uri, dest: File): Boolean {
+    private fun extractZip(
+        context: Context,
+        uri: Uri,
+        dest: File,
+        onProgress: (String) -> Unit,
+    ): Boolean {
         val stream = context.contentResolver.openInputStream(uri)
         if (stream == null) {
             log("openInputStream returned null")
@@ -89,6 +94,8 @@ object SystemImport {
         }
         val root = dest.canonicalFile
         var entries = 0
+        var files = 0
+        var lastReport = 0L
         ZipInputStream(stream).use { zip ->
             var entry = zip.nextEntry
             while (entry != null) {
@@ -101,14 +108,20 @@ object SystemImport {
                     canonical.mkdirs()
                 } else {
                     canonical.parentFile?.mkdirs()
-                    canonical.outputStream().use { zip.copyTo(it, 64 * 1024) }
+                    // El mlc01 real pesa varios GB: sin esto la app parece congelada
+                    val written = canonical.outputStream().use { zip.copyTo(it, 64 * 1024) }
+                    files++
+                    if (System.currentTimeMillis() - lastReport > 200) {
+                        lastReport = System.currentTimeMillis()
+                        onProgress("${entry.name} (${written / 1024 / 1024} MB)")
+                    }
                 }
                 zip.closeEntry()
                 entry = zip.nextEntry
                 entries++
             }
         }
-        log("extracted $entries entries")
+        log("extracted $entries entries ($files files)")
         return entries > 0
     }
 

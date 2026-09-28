@@ -1,8 +1,14 @@
 package info.cemu.cemu.settings.general
 
+import android.os.Handler
+import android.os.Looper
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -12,7 +18,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.dropUnlessResumed
 import androidx.lifecycle.viewmodel.compose.viewModel
 import info.cemu.cemu.common.settings.GamePadPosition
@@ -34,7 +42,12 @@ fun GeneralSettingsScreen(
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
+    // onProgress se invoca desde Dispatchers.IO y el estado de Compose solo se
+    // puede tocar en el hilo principal
+    val mainHandler = remember { Handler(Looper.getMainLooper()) }
     var importMessage by remember { mutableStateOf<String?>(null) }
+    var importing by remember { mutableStateOf(false) }
+    var importProgress by remember { mutableStateOf("") }
 
     val emulationSettings by viewModel.emulationSettings.collectAsState()
     val guiSettings by viewModel.guiSettings.collectAsState()
@@ -44,9 +57,13 @@ fun GeneralSettingsScreen(
     ) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
         coroutineScope.launch {
+            importing = true
+            importProgress = ""
             val message = try {
                 when (val result = withContext(Dispatchers.IO) {
-                    SystemImport.import(context, uri)
+                    SystemImport.import(context, uri) { text ->
+                        mainHandler.post { importProgress = text }
+                    }
                 }) {
                     is SystemImportResult.Success -> String.format(
                         tr("System files imported: %s"),
@@ -67,10 +84,29 @@ fun GeneralSettingsScreen(
                 NativeLogging.log("SystemImport: unhandled ${e.stackTraceToString()}")
                 String.format(tr("Import failed: %s"), e.toString())
             }
+            importing = false
             // Un AlertDialog en vez de un snackbar: el snackbar se autodescarta y
             // con el selector de archivos de por medio es facil no verlo nunca
             importMessage = message
         }
+    }
+
+    if (importing) {
+        // El mlc01 pesa varios GB: sin esto parece que la app se ha colgado
+        AlertDialog(
+            onDismissRequest = {},
+            title = { Text(tr("Importing system files...")) },
+            text = {
+                Column {
+                    Text(tr("Do not close the app. This can take several minutes."))
+                    if (importProgress.isNotEmpty()) {
+                        Spacer(Modifier.height(8.dp))
+                        Text(importProgress, style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+            },
+            confirmButton = {},
+        )
     }
 
     if (importMessage != null) {
