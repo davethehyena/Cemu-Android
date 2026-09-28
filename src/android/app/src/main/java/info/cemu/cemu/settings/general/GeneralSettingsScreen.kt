@@ -2,13 +2,16 @@ package info.cemu.cemu.settings.general
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.dropUnlessResumed
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -17,6 +20,7 @@ import info.cemu.cemu.common.ui.components.Button
 import info.cemu.cemu.common.ui.components.ScreenContent
 import info.cemu.cemu.common.ui.components.SingleSelection
 import info.cemu.cemu.common.ui.localization.tr
+import info.cemu.cemu.nativeinterface.NativeLogging
 import info.cemu.cemu.nativeinterface.NativeSettings
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -30,7 +34,7 @@ fun GeneralSettingsScreen(
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
-    val snackbarHostState = remember { SnackbarHostState() }
+    var importMessage by remember { mutableStateOf<String?>(null) }
 
     val emulationSettings by viewModel.emulationSettings.collectAsState()
     val guiSettings by viewModel.guiSettings.collectAsState()
@@ -40,30 +44,48 @@ fun GeneralSettingsScreen(
     ) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
         coroutineScope.launch {
-            val result = withContext(Dispatchers.IO) { SystemImport.import(context, uri) }
-            val message = when (result) {
-                is SystemImportResult.Success -> String.format(
-                    tr("System files imported: %s"),
-                    result.imported.joinToString(", ")
-                )
+            val message = try {
+                when (val result = withContext(Dispatchers.IO) {
+                    SystemImport.import(context, uri)
+                }) {
+                    is SystemImportResult.Success -> String.format(
+                        tr("System files imported: %s"),
+                        result.imported.joinToString(", ")
+                    )
 
-                is SystemImportResult.Failed -> String.format(
-                    tr("Import failed: %s"),
-                    result.reason
-                )
+                    is SystemImportResult.Failed -> String.format(
+                        tr("Import failed: %s"),
+                        result.reason
+                    )
 
-                SystemImportResult.InvalidArchive -> tr("That file is not a valid .zip archive")
-                SystemImportResult.NothingUsefulFound ->
-                    tr("No system files found in the archive")
+                    SystemImportResult.InvalidArchive -> tr("That file is not a valid .zip archive")
+                    SystemImportResult.NothingUsefulFound ->
+                        tr("No system files found in the archive")
+                }
+            } catch (e: Exception) {
+                // Sin esto, una excepcion aqui cierra la app y el usuario no ve nada
+                NativeLogging.log("SystemImport: unhandled ${e.stackTraceToString()}")
+                String.format(tr("Import failed: %s"), e.toString())
             }
-            snackbarHostState.currentSnackbarData?.dismiss()
-            snackbarHostState.showSnackbar(message, withDismissAction = true)
+            // Un AlertDialog en vez de un snackbar: el snackbar se autodescarta y
+            // con el selector de archivos de por medio es facil no verlo nunca
+            importMessage = message
         }
+    }
+
+    if (importMessage != null) {
+        AlertDialog(
+            onDismissRequest = { importMessage = null },
+            title = { Text(tr("Import system files")) },
+            text = { Text(importMessage.orEmpty()) },
+            confirmButton = {
+                TextButton(onClick = { importMessage = null }) { Text(tr("OK")) }
+            },
+        )
     }
 
     ScreenContent(
         appBarText = tr("General settings"),
-        snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
         navigateBack = navigateBack,
     ) {
         Button(

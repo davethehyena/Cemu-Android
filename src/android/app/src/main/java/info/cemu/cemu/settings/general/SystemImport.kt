@@ -2,12 +2,16 @@ package info.cemu.cemu.settings.general
 
 import android.content.Context
 import android.net.Uri
-import android.util.Log
 import info.cemu.cemu.common.android.context.internalFolder
+import info.cemu.cemu.nativeinterface.NativeLogging
 import java.io.File
 import java.util.zip.ZipInputStream
 
-private const val TAG = "SystemImport"
+private fun log(message: String) {
+    // android.util.Log solo va a logcat, que el usuario no puede leer desde el
+    // movil. NativeLogging escribe en el mismo log.txt que se puede exportar.
+    NativeLogging.log("SystemImport: $message")
+}
 
 sealed interface SystemImportResult {
     data class Success(val imported: List<String>) : SystemImportResult
@@ -24,24 +28,30 @@ object SystemImport {
         // getExternalFilesDir() como userDataPath (CemuApplication:151), asi que
         // escribir en filesDir deja los archivos donde el emulador no los mira.
         val filesDir = context.internalFolder()
+        log("start, uri=$uri, dataFolder=${filesDir.absolutePath}")
         if (!filesDir.isDirectory) {
+            log("FAIL data folder missing")
             return SystemImportResult.Failed("Data folder is missing: ${filesDir.absolutePath}")
         }
 
         val tempDir = File(filesDir, "system_import_tmp")
         tempDir.deleteRecursively()
         if (!tempDir.mkdirs()) {
+            log("FAIL cannot create temp dir")
             return SystemImportResult.Failed("Could not create a temporary folder")
         }
 
         return try {
             if (!extractZip(context, uri, tempDir)) {
+                log("FAIL not a readable archive")
                 SystemImportResult.InvalidArchive
             } else {
-                movePayload(tempDir, filesDir)
+                val result = movePayload(tempDir, filesDir)
+                log("result=$result")
+                result
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Import failed", e)
+            log("FAIL exception: $e")
             SystemImportResult.Failed(e.toString())
         } finally {
             tempDir.deleteRecursively()
@@ -50,18 +60,19 @@ object SystemImport {
 
     private fun movePayload(tempDir: File, filesDir: File): SystemImportResult {
         val source = findPayloadRoot(tempDir)
+        log("payload root=${source.absolutePath}")
         val imported = mutableListOf<String>()
         for (name in REQUIRED) {
             val from = File(source, name)
             if (!from.exists()) continue
             val to = File(filesDir, name)
             if (to.exists() && !to.deleteRecursively()) {
-                Log.w(TAG, "Could not replace existing $name")
+                log("could not replace existing $name")
                 continue
             }
             if (!from.renameTo(to)) from.copyRecursively(to, overwrite = true)
             imported.add(name)
-            Log.i(TAG, "Imported $name into ${to.absolutePath}")
+            log("imported $name into ${to.absolutePath}")
         }
         return if (imported.isEmpty()) {
             SystemImportResult.NothingUsefulFound
@@ -71,7 +82,11 @@ object SystemImport {
     }
 
     private fun extractZip(context: Context, uri: Uri, dest: File): Boolean {
-        val stream = context.contentResolver.openInputStream(uri) ?: return false
+        val stream = context.contentResolver.openInputStream(uri)
+        if (stream == null) {
+            log("openInputStream returned null")
+            return false
+        }
         val root = dest.canonicalFile
         var entries = 0
         ZipInputStream(stream).use { zip ->
@@ -81,7 +96,7 @@ object SystemImport {
                 // zip slip: una entrada con .. podria escribir fuera de nuestra carpeta
                 val inside = canonical == root || canonical.path.startsWith(root.path + File.separator)
                 if (!inside) {
-                    Log.w(TAG, "Skipping unsafe entry: ${entry.name}")
+                    log("skipping unsafe entry: ${entry.name}")
                 } else if (entry.isDirectory) {
                     canonical.mkdirs()
                 } else {
@@ -93,6 +108,7 @@ object SystemImport {
                 entries++
             }
         }
+        log("extracted $entries entries")
         return entries > 0
     }
 
@@ -104,6 +120,9 @@ object SystemImport {
         return tempDir
     }
 
-    private fun hasPayload(dir: File) =
-        File(dir, "mlc01").exists() || File(dir, "cafeLibs").exists()
+    private fun hasPayload(dir: File): Boolean {
+        val found = File(dir, "mlc01").exists() || File(dir, "cafeLibs").exists()
+        if (found) log("payload found in ${dir.absolutePath}")
+        return found
+    }
 }
