@@ -268,6 +268,7 @@ private:
 	// patches
 	void LoadPatchFiles(); // loads Cemuhook or Cemu patches
 	bool LoadCemuPatches();
+	bool ParseCemuPatchFilesInDir(const fs::path& dir, bool& foundPatches, bool recursive = false);
 
 	void ParseCemuhookPatchesTxtInternal(MemStreamReader& patchesStream);
 	bool ParseCemuPatchesTxtInternal(MemStreamReader& patchesStream);

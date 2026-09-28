@@ -758,7 +758,14 @@ void GraphicPack2::NotifyModuleLoaded(const RPLModule* rpl)
 	std::lock_guard<std::recursive_mutex> lock(mtx_patches);
 	list_modules.emplace_back(rpl);
 
-	// todo - iterate all active graphic packs and apply any matching patch groups
+	// Aplica los parches (incluidos los workarounds) de todos los graphic packs
+	// activos cuyo CRC coincida con el de este modulo.
+	for (auto& gp : GetActiveGraphicPacks())
+	{
+		if (gp == nullptr || !gp->IsEnabled() || gp->list_patchGroups.empty())
+			continue;
+		gp->ApplyPatchesForModule(rpl);
+	}
 }
 
 void GraphicPack2::NotifyModuleUnloaded(const RPLModule* rpl)

@@ -71,40 +71,71 @@ void PatchErrorHandler::showStageErrorMessageBox()
 bool GraphicPack2::LoadCemuPatches()
 {
 	bool foundPatches = false;
-	fs::path path(m_rulesPath);
-	path.remove_filename();
-	for (auto& p : fs::directory_iterator(path))
+
+	// Los parches pueden estar en la raiz del graphic pack o dentro de un
+	// subdirectorio 'Workarounds' (asi es como los publica cemu_graphic_packs,
+	// con la estructura <pack>/Workarounds/<nombre>/patch_<algo>.asm).
+	fs::path packDir(m_rulesPath);
+	packDir.remove_filename();
+
+	// 1) patch_*.asm en la raiz del pack (formato antiguo)
+	if (ParseCemuPatchFilesInDir(packDir, foundPatches) && foundPatches)
+		return true;
+
+	// 2) patch_*.asm dentro de Workarounds/, searched recursively
+	for (const char* workaroundDirName : { "Workarounds", "workarounds" })
 	{
-		auto& path = p.path();
-		if (fs::is_regular_file(p.status()) && path.has_filename())
+		fs::path workaroundDir = packDir / workaroundDirName;
+		std::error_code dirEc;
+		if (!fs::is_directory(workaroundDir, dirEc))
+			continue;
+		if (ParseCemuPatchFilesInDir(workaroundDir, foundPatches, true) && foundPatches)
+			return true;
+	}
+
+	return foundPatches;
+}
+
+// busca ficheros patch_*.asm en un directorio, opcionalmente de forma recursiva
+bool GraphicPack2::ParseCemuPatchFilesInDir(const fs::path& dir, bool& foundPatches, bool recursive)
+{
+	std::error_code dirEc;
+	auto opts = fs::directory_options::none;
+	if (recursive)
+		opts = fs::directory_options::follow_directory_symlink;
+
+	for (auto it = fs::recursive_directory_iterator(dir, opts, dirEc);
+		it != fs::recursive_directory_iterator(); it.increment(dirEc))
+	{
+		if (dirEc)
+			break;
+		const auto& path = it->path();
+		if (!it->is_regular_file(dirEc) || !path.has_filename())
+			continue;
+
+		std::string filename = _pathToUtf8(path.filename());
+		if (!boost::istarts_with(filename, "patch_") || !boost::iends_with(filename, ".asm"))
+			continue;
+
+		FileStream* patchFile = FileStream::openFile2(path);
+		if (patchFile == nullptr)
 		{
-			// check if filename matches
-			std::string filename = _pathToUtf8(path.filename());
-			if (boost::istarts_with(filename, "patch_") && boost::iends_with(filename, ".asm"))
-			{
-				FileStream* patchFile = FileStream::openFile2(path);
-				if (patchFile)
-				{
-					// read file
-					std::vector<uint8> fileData;
-					patchFile->extract(fileData);
-					delete patchFile;
-					MemStreamReader patchesStream(fileData.data(), (sint32)fileData.size());
-					// load Cemu style patch file
-					if (!ParseCemuPatchesTxtInternal(patchesStream))
-					{
-						cemuLog_log(LogType::Force, "Error while processing \"{}\". No patches for this graphic pack will be applied.", _pathToUtf8(path));
-						cemu_assert_debug(list_patchGroups.empty());
-						return true; // return true since a .asm patch was found even if we could not parse it
-					}
-				}
-				else
-				{
-					cemuLog_log(LogType::Force, "Unable to load patch file \"{}\"", _pathToUtf8(path));
-				}
-				foundPatches = true;
-			}
+			cemuLog_log(LogType::Force, "Unable to load patch file \"{}\"", _pathToUtf8(path));
+			foundPatches = true;
+			continue;
 		}
+
+		std::vector<uint8> fileData;
+		patchFile->extract(fileData);
+		delete patchFile;
+		MemStreamReader patchesStream(fileData.data(), (sint32)fileData.size());
+		if (!ParseCemuPatchesTxtInternal(patchesStream))
+		{
+			cemuLog_log(LogType::Force, "Error while processing \"{}\". No patches for this graphic pack will be applied.", _pathToUtf8(path));
+			cemu_assert_debug(list_patchGroups.empty());
+			return true; // un .asm existe aunque no se haya podido parsear
+		}
+		foundPatches = true;
 	}
 	return foundPatches;
 }
