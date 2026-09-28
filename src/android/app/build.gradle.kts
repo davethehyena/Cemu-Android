@@ -85,7 +85,12 @@ android {
             applicationIdSuffix = ".debug"
         }
         release {
-            isMinifyEnabled = true
+            // El mayor beneficio de un build release es la optimizacion del codigo
+            // nativo (CMAKE_BUILD_TYPE=Release => -O2 y NDEBUG, que desactiva las
+            // aserciones del recompilador JIT). R8 no aporta nada aqui porque el
+            // cuello de botella esta en el C++, y en cambio puede romper Compose y
+            // las llamadas JNI en runtime, asi que se deja desactivado.
+            isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"

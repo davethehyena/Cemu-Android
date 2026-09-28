@@ -99,7 +99,7 @@ jobs:
       - name: Build Cemu
         working-directory: ./src/android
         env:
-          BUILD_TYPE: ${{ inputs.build_type || 'debug' }}
+          BUILD_TYPE: ${{ inputs.build_type || 'release' }}
         run: |
           set -o pipefail
           ./gradlew "assemble${BUILD_TYPE^}" \
@@ -144,7 +144,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: Cemu-apk-${{ inputs.build_type || 'debug' }}
+          name: Cemu-apk-${{ inputs.build_type || 'release' }}
           path: apk-out/*.apk
           if-no-files-found: warn
           retention-days: 30
