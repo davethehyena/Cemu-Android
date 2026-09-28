@@ -117,17 +117,19 @@ jobs:
       - name: Merge logs
         if: always()
         run: |
-          {
-            echo "### Build de Cemu Android - $(date -u +%Y-%m-%dT%H:%M:%SZ)"
-            echo "### Commit: ${{ github.sha }}"
-            echo
-            for f in "$LOG_DIR"/*.log; do
-              [ -f "$f" ] || continue
+          for f in "$LOG_DIR"/*.log; do
+            [ -f "$f" ] || continue
+            [ "$(basename "$f")" = "all.log" ] && continue
+            {
               echo "===== $(basename "$f") ====="
               cat "$f"
               echo
-            done
-          } > "$LOG_DIR/all.log"
+            } >> "$LOG_DIR/all.log"
+          done
+          {
+            echo "### Build de Cemu Android - $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo "### Commit: ${{ github.sha }}"
+          } | cat - "$LOG_DIR/all.log" > "$LOG_DIR/all.tmp" && mv "$LOG_DIR/all.tmp" "$LOG_DIR/all.log"
 
       - name: Upload build log
         if: always()
@@ -139,9 +141,10 @@ jobs:
           retention-days: 30
 
       - name: Upload APK
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: Cemu-apk-${{ inputs.build_type || 'debug' }}
           path: apk-out/*.apk
-          if-no-files-found: error
+          if-no-files-found: warn
           retention-days: 30
