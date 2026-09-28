@@ -3,6 +3,7 @@ package info.cemu.cemu.settings.general
 import android.content.Context
 import android.net.Uri
 import android.util.Log
+import info.cemu.cemu.common.android.context.internalFolder
 import java.io.File
 import java.util.zip.ZipInputStream
 
@@ -10,6 +11,7 @@ private const val TAG = "SystemImport"
 
 sealed interface SystemImportResult {
     data class Success(val imported: List<String>) : SystemImportResult
+    data class Failed(val reason: String) : SystemImportResult
     data object InvalidArchive : SystemImportResult
     data object NothingUsefulFound : SystemImportResult
 }
@@ -18,19 +20,35 @@ object SystemImport {
     private val REQUIRED = listOf("mlc01", "cafeLibs", "otp.bin", "seeprom.bin")
 
     fun import(context: Context, uri: Uri): SystemImportResult {
-        val filesDir = context.filesDir
+        // Ojo: tiene que ser internalFolder() y no filesDir. Cemu usa
+        // getExternalFilesDir() como userDataPath (CemuApplication:151), asi que
+        // escribir en filesDir deja los archivos donde el emulador no los mira.
+        val filesDir = context.internalFolder()
+        if (!filesDir.isDirectory) {
+            return SystemImportResult.Failed("Data folder is missing: ${filesDir.absolutePath}")
+        }
+
         val tempDir = File(filesDir, "system_import_tmp")
         tempDir.deleteRecursively()
         if (!tempDir.mkdirs()) {
-            Log.e(TAG, "Could not create temporary directory")
-            return SystemImportResult.NothingUsefulFound
+            return SystemImportResult.Failed("Could not create a temporary folder")
         }
 
-        if (!extractZip(context, uri, tempDir)) {
+        return try {
+            if (!extractZip(context, uri, tempDir)) {
+                SystemImportResult.InvalidArchive
+            } else {
+                movePayload(tempDir, filesDir)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Import failed", e)
+            SystemImportResult.Failed(e.toString())
+        } finally {
             tempDir.deleteRecursively()
-            return SystemImportResult.InvalidArchive
         }
+    }
 
+    private fun movePayload(tempDir: File, filesDir: File): SystemImportResult {
         val source = findPayloadRoot(tempDir)
         val imported = mutableListOf<String>()
         for (name in REQUIRED) {
@@ -43,10 +61,8 @@ object SystemImport {
             }
             if (!from.renameTo(to)) from.copyRecursively(to, overwrite = true)
             imported.add(name)
-            Log.i(TAG, "Imported $name")
+            Log.i(TAG, "Imported $name into ${to.absolutePath}")
         }
-        tempDir.deleteRecursively()
-
         return if (imported.isEmpty()) {
             SystemImportResult.NothingUsefulFound
         } else {

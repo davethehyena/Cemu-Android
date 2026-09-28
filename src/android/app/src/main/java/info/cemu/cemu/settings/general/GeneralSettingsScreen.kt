@@ -47,12 +47,17 @@ fun GeneralSettingsScreen(
                     result.imported.joinToString(", ")
                 )
 
+                is SystemImportResult.Failed -> String.format(
+                    tr("Import failed: %s"),
+                    result.reason
+                )
+
                 SystemImportResult.InvalidArchive -> tr("That file is not a valid .zip archive")
                 SystemImportResult.NothingUsefulFound ->
                     tr("No system files found in the archive")
             }
             snackbarHostState.currentSnackbarData?.dismiss()
-            snackbarHostState.showSnackbar(message)
+            snackbarHostState.showSnackbar(message, withDismissAction = true)
         }
     }
 
