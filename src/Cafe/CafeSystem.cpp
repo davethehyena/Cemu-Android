@@ -268,6 +268,9 @@ void InfoLog_PrintActiveSettings()
 	}
 #endif
 	cemuLog_log(LogType::Force, "Console language: {}", stdx::to_underlying(config.console_language.GetValue()));
+	// Para confirmar desde el log si el giroscopio del movil llegara o no al
+	// juego, que era justo lo que no se podia saber antes
+	cemuLog_log(LogType::Force, "Device motion: {}", config.device_motion.GetValue() ? "true" : "false");
 }
 
 struct SharedDataEntry

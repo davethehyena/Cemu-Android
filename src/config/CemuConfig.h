@@ -451,6 +451,10 @@ struct CemuConfig
 	ConfigValue<bool> gx2drawdone_sync { true };
 	ConfigValue<bool> render_upside_down{ false };
 	ConfigValue<bool> async_compile{ true };
+	// Interruptor del giroscopio y el acelerometro del movil. Va on por
+	// defecto porque hay juegos (Splatoon) que no arrancan sin el, pero se
+	// puede apagar si algun juego se cuelga al detectar sensor.
+	ConfigValue<bool> device_motion{ true };
 #if ENABLE_METAL
 	ConfigValue<bool> force_mesh_shaders{ false };
 #endif

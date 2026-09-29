@@ -5,9 +5,11 @@ import androidx.compose.runtime.remember
 import androidx.lifecycle.compose.dropUnlessResumed
 import info.cemu.cemu.common.ui.components.Button
 import info.cemu.cemu.common.ui.components.ScreenContent
+import info.cemu.cemu.common.ui.components.Toggle
 import info.cemu.cemu.common.ui.localization.controllerTypeToString
 import info.cemu.cemu.common.ui.localization.tr
 import info.cemu.cemu.nativeinterface.NativeInput
+import info.cemu.cemu.nativeinterface.NativeSettings
 
 @Composable
 fun InputSettingsScreen(
@@ -24,6 +26,12 @@ fun InputSettingsScreen(
         appBarText = tr("Input settings"),
         navigateBack = navigateBack,
     ) {
+        Toggle(
+            label = tr("Use device motion sensors"),
+            description = tr("Uses the phone's gyroscope and accelerometer as the GamePad's motion controls. Required by games like Splatoon. Turn off if a game misbehaves when it detects motion"),
+            initialCheckedState = NativeSettings::getDeviceMotion,
+            onCheckedChanged = NativeSettings::setDeviceMotion,
+        )
         Button(
             label = tr("Input overlay settings"),
             onClick = dropUnlessResumed { goToInputOverlaySettings() },
