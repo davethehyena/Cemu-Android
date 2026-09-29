@@ -330,6 +330,32 @@ uint32 LoadSharedData()
 			// try to read font from MLC first
 			auto path = ActiveSettings::GetMlcPath(shareddataDef[i].mlcPath);
 			FileStream* fontFile = FileStream::openFile2(path);
+			// El MLC tiene prioridad, pero un volcado parcial deja la fuente
+			// cortada y entonces el menu pierde letras y tildes. Las copias
+			// completas vienen dentro del propio APK, asi que si la del MLC es
+			// mucho mas pequena se usa esa en su lugar.
+			if (fontFile)
+			{
+				const auto resourcePath = ActiveSettings::GetDataPath(shareddataDef[i].resourcePath);
+				if (fs::exists(resourcePath))
+				{
+					if (FileStream* bundledFile = FileStream::openFile2(resourcePath))
+					{
+						const uint32 mlcSize = fontFile->GetSize();
+						const uint32 bundledSize = bundledFile->GetSize();
+						delete bundledFile;
+						// menos del 60% del tamano completo es truncada seguro
+						if (bundledSize > 0 && mlcSize * 10 < bundledSize * 6)
+						{
+							cemuLog_log(LogType::Force,
+								"Shared font {} is truncated in the MLC ({}KB instead of {}KB), using the bundled copy",
+								shareddataDef[i].fileName, mlcSize / 1024, bundledSize / 1024);
+							delete fontFile;
+							fontFile = FileStream::openFile2(resourcePath);
+						}
+					}
+				}
+			}
 			// alternatively fall back to our shared fonts
 			if (!fontFile)
 			{
