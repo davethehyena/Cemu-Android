@@ -22,6 +22,7 @@ import info.cemu.cemu.common.settings.OverlayInputConfig
 import info.cemu.cemu.nativeinterface.NativeEmulation
 import info.cemu.cemu.nativeinterface.NativeEmulation.PrepareTitleResult
 import info.cemu.cemu.nativeinterface.NativeException
+import info.cemu.cemu.nativeinterface.NativeSettings
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -34,7 +35,9 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 data class SideMenuState(
-    val isMotionEnabled: Boolean = false,
+    // Se lee el ajuste guardado en vez de empezar siempre en false, que era lo
+    // que hacia que el menu lateral dijera "desactivado" estando activo
+    val isMotionEnabled: Boolean = NativeSettings.getDeviceMotion(),
     val isTVReplacedWithPad: Boolean = false,
     val isPadVisible: Boolean = false,
     val isInputOverlayVisible: Boolean = false,

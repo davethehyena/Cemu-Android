@@ -68,6 +68,7 @@ import info.cemu.cemu.emulation.inputoverlay.InputOverlaySurfaceView.InputMode.D
 import info.cemu.cemu.emulation.inputoverlay.InputOverlaySurfaceView.InputMode.EDIT_POSITION
 import info.cemu.cemu.emulation.inputoverlay.InputOverlaySurfaceView.InputMode.EDIT_SIZE
 import info.cemu.cemu.nativeinterface.NativeEmulation
+import info.cemu.cemu.nativeinterface.NativeSettings
 import kotlinx.coroutines.launch
 
 @Composable
@@ -152,6 +153,12 @@ fun EmulationScreen(
                         updateState = {
                             viewModel.updateSideMenuState(it)
                             setMotionSensorEnabled(it.isMotionEnabled)
+                            // El menu lateral y Ajustes > Ajustes de entrada
+                            // controlan lo mismo, asi que se guardan el uno al
+                            // otro. Antes cada uno guardaba su propio estado y
+                            // se pisaban, por eso habia que activar el sensor
+                            // en los dos sitios.
+                            NativeSettings.setDeviceMotion(it.isMotionEnabled)
                             NativeEmulation.setReplaceTVWithPadView(it.isTVReplacedWithPad)
                             closeDrawer()
                         },

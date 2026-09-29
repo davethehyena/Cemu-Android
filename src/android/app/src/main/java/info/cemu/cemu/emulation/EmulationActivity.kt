@@ -25,6 +25,7 @@ import info.cemu.cemu.emulation.input.DeviceMotionHandler
 import info.cemu.cemu.emulation.input.HotkeyManager
 import info.cemu.cemu.emulation.input.InputHandler
 import info.cemu.cemu.emulation.input.NativeInputDeviceListener
+import info.cemu.cemu.nativeinterface.NativeSettings
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
@@ -116,6 +117,12 @@ class EmulationActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
 
         inputManager = InputDelegateManager(this)
+
+        // Arrancar los sensores del movil sin tener que ir al menu lateral.
+        // El interruptor de ahi solo guardaba su propio estado y salia en
+        // false por defecto, asi que el giroscopio nunca se registraba y el
+        // juego se quedaba sin datos aunque dijera que habia sensor.
+        inputManager.setDeviceMotionEnabled(NativeSettings.getDeviceMotion())
 
         setupHotkeys()
 
