@@ -108,8 +108,9 @@ jobs:
 
       # El log de compilacion solo se puede bajar del artifact con
       # autenticacion, asi que cuando el build falla no habia forma de saber
-      # que habia pasado. Se vuelca lo importante en el resumen del run, que si
-      # se puede leer sin token.
+      # que habia pasado. Se vuelca lo importante en el resumen del run, y
+      # ademas cada error se emite como anotacion, que si se puede leer sin
+      # token a traves de la API de checks.
       - name: Resumen del log de compilacion
         if: always()
         run: |
@@ -123,6 +124,11 @@ jobs:
             tail -n 60 "$LOG_DIR/05-build.log" 2>/dev/null || echo "sin log"
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
+          grep -aE "error:|FAILED:" "$LOG_DIR/05-build.log" 2>/dev/null | head -25 | while IFS= read -r err; do
+            err=$(printf '%s' "$err" | tr -d '\000' | head -c 600)
+            echo "::error title=Fallo de compilacion::${err}"
+          done
+          echo "::error title=Fallo de compilacion::fin de los errores, revisar el resumen del run"
 
       - name: Collect APKs
         if: always()
