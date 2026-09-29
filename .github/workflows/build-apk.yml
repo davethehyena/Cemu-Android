@@ -10,7 +10,7 @@ on:
       build_type:
         description: Tipo de build
         required: true
-        default: debug
+        default: release
         type: choice
         options: [debug, release]
 
@@ -105,6 +105,24 @@ jobs:
           ./gradlew "assemble${BUILD_TYPE^}" \
             --stacktrace \
             2>&1 | tee -a "$LOG_DIR/05-build.log"
+
+      # El log de compilacion solo se puede bajar del artifact con
+      # autenticacion, asi que cuando el build falla no habia forma de saber
+      # que habia pasado. Se vuelca lo importante en el resumen del run, que si
+      # se puede leer sin token.
+      - name: Resumen del log de compilacion
+        if: always()
+        run: |
+          {
+            echo "### Errores de compilacion"
+            echo '```'
+            grep -nE "error:|FAILED:|ninja: build stopped|CMake Error" "$LOG_DIR/05-build.log" 2>/dev/null | head -40 || echo "sin errores de compilacion"
+            echo '```'
+            echo "### Ultimas 60 lineas de 05-build.log"
+            echo '```'
+            tail -n 60 "$LOG_DIR/05-build.log" 2>/dev/null || echo "sin log"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Collect APKs
         if: always()
