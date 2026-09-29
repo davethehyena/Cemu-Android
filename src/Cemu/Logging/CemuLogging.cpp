@@ -164,11 +164,12 @@ void cemuLog_createLogFile(bool triggeredByCrash)
 	// El log se crea en cada arranque de titulo y abrirlo en modo out lo
 	// truncaba, asi que al pasar del juego al menu se perdia justo el log del
 	// juego que uno quiere depurar. Antes de truncar se aparta el anterior.
+	const auto previousPath = path.parent_path() / "log-previous.txt";
 	if (fs::exists(path))
 	{
 		std::error_code ec;
-		fs::remove_file(path.parent_path() / "log-previous.txt", ec);
-		fs::rename(path, path.parent_path() / "log-previous.txt", ec);
+		fs::remove(previousPath, ec);
+		fs::rename(path, previousPath, ec);
 	}
 	LogContext.file_stream.open(path, std::ios::out);
 	if (LogContext.file_stream.fail())
